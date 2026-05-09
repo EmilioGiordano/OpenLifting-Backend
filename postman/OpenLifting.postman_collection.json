@@ -1,0 +1,219 @@
+{
+  "info": {
+    "_postman_id": "openlifting-backend-collection",
+    "name": "OpenLifting",
+    "description": "API collection for the OpenLifting backend.\n\n**Setup**\n\n1. Start the API: `php artisan serve` (defaults to http://127.0.0.1:8000).\n2. The collection variable `base_url` is preset to that URL — change it if you serve elsewhere.\n3. Run **Auth → Register (athlete)** or **Auth → Register (instructor)**. Each request randomizes the name and email via Postman dynamic vars (`{{$randomFullName}}`, `{{$randomEmail}}`), so you can hit Send repeatedly without hitting the unique-email check.\n4. After register, the response token is saved into `{{token}}` and the generated email into `{{last_email}}`.\n5. **Login** uses `{{last_email}}` so it picks up whoever you registered last. Password is fixed to `password123`.\n6. Authenticated requests (**Logout**, **Get current user**) read `{{token}}` automatically.\n\n**Phases included**\n\n- Phase 2 (Auth): register / login / logout / get current user.\n\nMore endpoints land here as later phases ship.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health check",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Accept", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{base_url}}/up",
+          "host": ["{{base_url}}"],
+          "path": ["up"]
+        },
+        "description": "Returns app + database status as JSON. 200 + status:ok if everything is reachable, 503 + status:degraded if a check fails (e.g. Postgres unreachable). Response shape:\n```\n{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"app\": \"ok\",\n    \"database\": { \"status\": \"ok\", \"connection\": \"pgsql\" }\n  },\n  \"timestamp\": \"...\"\n}\n```"
+      }
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register (athlete)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{$randomFullName}}\",\n  \"email\": \"{{$randomEmail}}\",\n  \"password\": \"password123\",\n  \"password_confirmation\": \"password123\",\n  \"role\": \"athlete\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "register"]
+            },
+            "description": "Creates an athlete user and returns `{ token, user }`. The token is saved into the `token` collection variable on success (201)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.token) {",
+                  "        pm.collectionVariables.set('token', body.token);",
+                  "        console.log('token saved to collection variable');",
+                  "    }",
+                  "    if (body.user && body.user.email) {",
+                  "        pm.collectionVariables.set('last_email', body.user.email);",
+                  "        console.log('last_email saved: ' + body.user.email);",
+                  "    }",
+                  "    pm.test('returns token and user', () => {",
+                  "        pm.expect(body).to.have.property('token');",
+                  "        pm.expect(body.user).to.have.property('id');",
+                  "        pm.expect(body.user.role).to.eql('athlete');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register (instructor)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Coach {{$randomFirstName}}\",\n  \"email\": \"{{$randomEmail}}\",\n  \"password\": \"password123\",\n  \"password_confirmation\": \"password123\",\n  \"role\": \"instructor\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "register"]
+            },
+            "description": "Same endpoint as athlete register, but with `role: instructor`. No athlete profile is created for instructors."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.token) {",
+                  "        pm.collectionVariables.set('token', body.token);",
+                  "    }",
+                  "    if (body.user && body.user.email) {",
+                  "        pm.collectionVariables.set('last_email', body.user.email);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{last_email}}\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "login"]
+            },
+            "description": "Returns `{ token, user }` if credentials match. Saves token into the `token` collection variable. Throttled at 5 attempts per minute per IP."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    if (body.token) {",
+                  "        pm.collectionVariables.set('token', body.token);",
+                  "        console.log('token saved to collection variable');",
+                  "    }",
+                  "    pm.test('returns token and user', () => {",
+                  "        pm.expect(body).to.have.property('token');",
+                  "        pm.expect(body.user).to.have.property('id');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "logout"]
+            },
+            "description": "Revokes only the token used for this request (other tokens for the same user keep working). Returns 204 on success, 401 if the token is missing or already revoked."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 204) {",
+                  "    pm.collectionVariables.set('token', '');",
+                  "    console.log('token cleared from collection variable');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get current user",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/user",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user"]
+            },
+            "description": "Smoke check: returns the authenticated user from the bearer token. Useful for verifying that a token is still valid."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "last_email",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
