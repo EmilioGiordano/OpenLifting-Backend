@@ -1,0 +1,12 @@
+<?php
+
+namespace App\Enums;
+
+enum Muscle: string
+{
+    case VASTUS_LATERALIS = 'VASTUS_LATERALIS';
+    case VASTUS_MEDIALIS = 'VASTUS_MEDIALIS';
+    case GLUTEUS_MAXIMUS = 'GLUTEUS_MAXIMUS';
+    case ERECTOR_SPINAE = 'ERECTOR_SPINAE';
+    case BICEPS_FEMORIS = 'BICEPS_FEMORIS';
+}

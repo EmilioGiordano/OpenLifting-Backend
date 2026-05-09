@@ -29,6 +29,8 @@ CREATE TABLE users (
     CONSTRAINT uq_users_email UNIQUE (email)
 );
 
+CREATE INDEX idx_users_role_id ON users(role_id);
+
 -- ─────────────────────────────────────────────
 -- 3. ATHLETE PROFILES (1:1 con users)
 -- ─────────────────────────────────────────────
@@ -50,6 +52,8 @@ CREATE TABLE athlete_profiles (
     CONSTRAINT chk_athlete_profiles_sex    CHECK (sex IN ('MALE', 'FEMALE'))
 );
 
+-- user_id ya tiene índice implícito por UNIQUE
+
 -- ─────────────────────────────────────────────
 -- 4. MVC CALIBRATIONS
 -- Un valor vigente por músculo+lado (upsert al recalibrar)
@@ -69,6 +73,8 @@ CREATE TABLE mvc_calibrations (
     CONSTRAINT chk_mvc_calibrations_side   CHECK (side IN ('LEFT', 'RIGHT'))
 );
 
+-- athlete_profile_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
+
 -- ─────────────────────────────────────────────
 -- 5. INSTRUCTOR ↔ ATHLETE (pivot)
 -- ─────────────────────────────────────────────
@@ -82,6 +88,9 @@ CREATE TABLE instructor_athlete (
     CONSTRAINT fk_instructor_athlete_instructor FOREIGN KEY (instructor_id) REFERENCES users(id) ON DELETE RESTRICT,
     CONSTRAINT fk_instructor_athlete_athlete    FOREIGN KEY (athlete_id)    REFERENCES users(id) ON DELETE RESTRICT
 );
+
+CREATE INDEX idx_instructor_athlete_athlete_id ON instructor_athlete(athlete_id);
+-- instructor_id ya tiene índice implícito por ser primera columna del PK compuesto
 
 -- ─────────────────────────────────────────────
 -- 6. TRAINING SESSIONS
@@ -100,8 +109,11 @@ CREATE TABLE training_sessions (
 
     CONSTRAINT fk_training_sessions_athlete    FOREIGN KEY (athlete_user_id)    REFERENCES users(id) ON DELETE RESTRICT,
     CONSTRAINT fk_training_sessions_instructor FOREIGN KEY (instructor_user_id) REFERENCES users(id) ON DELETE SET NULL,
-    CONSTRAINT chk_training_sessions_source    CHECK (device_source IN ('REAL SENSORS', 'SIMULATED'))
+    CONSTRAINT chk_training_sessions_source    CHECK (device_source IN ('REAL', 'SIMULATED'))
 );
+
+CREATE INDEX idx_training_sessions_athlete    ON training_sessions(athlete_user_id);
+CREATE INDEX idx_training_sessions_instructor ON training_sessions(instructor_user_id);
 
 -- ─────────────────────────────────────────────
 -- 7. TRAINING SETS
@@ -118,11 +130,14 @@ CREATE TABLE training_sets (
     created_at  TIMESTAMP    NOT NULL DEFAULT now(),
     deleted_at  TIMESTAMP             DEFAULT NULL,
 
-    CONSTRAINT fk_training_sets_session  FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_training_sets_variant CHECK (variant IN ('LOW_BAR', 'HIGH_BAR')),
-    CONSTRAINT chk_training_sets_depth   CHECK (depth IN ('ABOVE_PARALLEL', 'PARALLEL', 'BELOW_PARALLEL')),
-    CONSTRAINT chk_training_sets_rpe     CHECK (rpe BETWEEN 1.0 AND 10.0)
+    CONSTRAINT fk_training_sets_session    FOREIGN KEY (session_id) REFERENCES training_sessions(id) ON DELETE RESTRICT,
+    CONSTRAINT uq_training_sets_set_number UNIQUE (session_id, set_number),
+    CONSTRAINT chk_training_sets_variant   CHECK (variant IN ('LOW_BAR', 'HIGH_BAR')),
+    CONSTRAINT chk_training_sets_depth     CHECK (depth IN ('ABOVE_PARALLEL', 'PARALLEL', 'BELOW_PARALLEL')),
+    CONSTRAINT chk_training_sets_rpe       CHECK (rpe BETWEEN 1.0 AND 10.0)
 );
+
+-- session_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
 
 -- ─────────────────────────────────────────────
 -- 8. REPS
@@ -134,8 +149,11 @@ CREATE TABLE reps (
     duration_ms INT      NOT NULL DEFAULT 0,
     deleted_at  TIMESTAMP         DEFAULT NULL,
 
-    CONSTRAINT fk_reps_set FOREIGN KEY (set_id) REFERENCES training_sets(id) ON DELETE RESTRICT
+    CONSTRAINT fk_reps_set        FOREIGN KEY (set_id) REFERENCES training_sets(id) ON DELETE RESTRICT,
+    CONSTRAINT uq_reps_rep_number UNIQUE (set_id, rep_number)
 );
+
+-- set_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
 
 -- ─────────────────────────────────────────────
 -- 9. MUSCLE ACTIVATIONS (por rep, músculo y lado)
@@ -150,9 +168,12 @@ CREATE TABLE muscle_activations (
     deleted_at       TIMESTAMP            DEFAULT NULL,
 
     CONSTRAINT fk_muscle_activations_rep     FOREIGN KEY (rep_id) REFERENCES reps(id) ON DELETE RESTRICT,
+    CONSTRAINT uq_muscle_activations_slot    UNIQUE (rep_id, muscle, side),
     CONSTRAINT chk_muscle_activations_muscle CHECK (muscle IN ('VASTUS_LATERALIS', 'VASTUS_MEDIALIS', 'GLUTEUS_MAXIMUS', 'ERECTOR_SPINAE', 'BICEPS_FEMORIS')),
     CONSTRAINT chk_muscle_activations_side   CHECK (side IN ('LEFT', 'RIGHT'))
 );
+
+-- rep_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
 
 -- ─────────────────────────────────────────────
 -- 10. SET METRICS (1:1 con training_sets)
@@ -175,6 +196,8 @@ CREATE TABLE set_metrics (
     CONSTRAINT uq_set_metrics_set UNIQUE (set_id)
 );
 
+-- set_id ya tiene índice implícito por UNIQUE
+
 -- ─────────────────────────────────────────────
 -- 11. RECOMMENDATIONS
 -- ─────────────────────────────────────────────
@@ -190,17 +213,4 @@ CREATE TABLE recommendations (
     CONSTRAINT chk_recommendations_severity CHECK (severity IN ('NORMAL', 'MONITOR', 'RISK'))
 );
 
--- ─────────────────────────────────────────────
--- ÍNDICES en columnas FK
--- PostgreSQL no los crea automáticamente en la tabla referenciante
--- ─────────────────────────────────────────────
-CREATE INDEX idx_athlete_profiles_user_id      ON athlete_profiles(user_id);
-CREATE INDEX idx_mvc_calibrations_profile_id   ON mvc_calibrations(athlete_profile_id);
-CREATE INDEX idx_instructor_athlete_athlete_id ON instructor_athlete(athlete_id);
-CREATE INDEX idx_training_sessions_athlete     ON training_sessions(athlete_user_id);
-CREATE INDEX idx_training_sessions_instructor  ON training_sessions(instructor_user_id);
-CREATE INDEX idx_training_sets_session_id      ON training_sets(session_id);
-CREATE INDEX idx_reps_set_id                   ON reps(set_id);
-CREATE INDEX idx_muscle_activations_rep_id     ON muscle_activations(rep_id);
-CREATE INDEX idx_recommendations_set_id        ON recommendations(set_id);
--- set_metrics.set_id ya tiene índice implícito por UNIQUE
+CREATE INDEX idx_recommendations_set_id ON recommendations(set_id);
