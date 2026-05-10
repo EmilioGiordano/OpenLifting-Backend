@@ -222,6 +222,7 @@ GET  /api/instructor/athletes/{id}/sessions   → sesiones del atleta
 4. **Roles separados**: un usuario es `athlete` o `instructor`. Los instructores pueden ver sesiones de atletas vinculados.
 5. **Sin recomputation backend**: si en el futuro se cambian los thresholds, el campo `thresholds_version` permite identificar con qué versión se computó cada set.
 6. **Sin Google OAuth por ahora**: auth simple con email/password + Sanctum. Extensible a OAuth después.
+7. **Escala EMG: `%MVC` en `[0, 100]`, normalizado en el dispositivo**: tanto `mvc_calibrations.mvc_value` como (a futuro) `muscle_activations.percent_mvc` viajan ya normalizados desde el firmware/simulador. El backend nunca ve μV crudos; almacena lo que recibe y enforce `0 < value <= 100` vía CHECK constraint. Decisión completa con alternativas y consecuencias en `docs/adr/0001-emg-data-scale.md`.
 
 ---
 
