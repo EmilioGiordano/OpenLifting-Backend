@@ -23,6 +23,7 @@ return new class extends Migration
 
         DB::statement("ALTER TABLE mvc_calibrations ADD CONSTRAINT chk_mvc_calibrations_muscle CHECK (muscle IN ('VASTUS_LATERALIS', 'VASTUS_MEDIALIS', 'GLUTEUS_MAXIMUS', 'ERECTOR_SPINAE', 'BICEPS_FEMORIS'))");
         DB::statement("ALTER TABLE mvc_calibrations ADD CONSTRAINT chk_mvc_calibrations_side CHECK (side IN ('LEFT', 'RIGHT'))");
+        DB::statement("ALTER TABLE mvc_calibrations ADD CONSTRAINT chk_mvc_calibrations_value CHECK (mvc_value > 0)");
     }
 
     public function down(): void

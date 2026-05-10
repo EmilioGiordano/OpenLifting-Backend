@@ -47,9 +47,11 @@ CREATE TABLE athlete_profiles (
     updated_at    TIMESTAMP             DEFAULT now(),
     deleted_at    TIMESTAMP             DEFAULT NULL,
 
-    CONSTRAINT fk_athlete_profiles_user    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
-    CONSTRAINT uq_athlete_profiles_user_id UNIQUE (user_id),
-    CONSTRAINT chk_athlete_profiles_sex    CHECK (sex IN ('MALE', 'FEMALE'))
+    CONSTRAINT fk_athlete_profiles_user        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT uq_athlete_profiles_user_id     UNIQUE (user_id),
+    CONSTRAINT chk_athlete_profiles_sex        CHECK (sex IN ('MALE', 'FEMALE')),
+    CONSTRAINT chk_athlete_profiles_bodyweight CHECK (bodyweight_kg BETWEEN 30 AND 300),
+    CONSTRAINT chk_athlete_profiles_age        CHECK (age_years BETWEEN 14 AND 100)
 );
 
 -- user_id ya tiene índice implícito por UNIQUE
@@ -70,7 +72,8 @@ CREATE TABLE mvc_calibrations (
     CONSTRAINT fk_mvc_calibrations_profile FOREIGN KEY (athlete_profile_id) REFERENCES athlete_profiles(id) ON DELETE RESTRICT,
     CONSTRAINT uq_mvc_calibrations_slot    UNIQUE (athlete_profile_id, muscle, side),
     CONSTRAINT chk_mvc_calibrations_muscle CHECK (muscle IN ('VASTUS_LATERALIS', 'VASTUS_MEDIALIS', 'GLUTEUS_MAXIMUS', 'ERECTOR_SPINAE', 'BICEPS_FEMORIS')),
-    CONSTRAINT chk_mvc_calibrations_side   CHECK (side IN ('LEFT', 'RIGHT'))
+    CONSTRAINT chk_mvc_calibrations_side   CHECK (side IN ('LEFT', 'RIGHT')),
+    CONSTRAINT chk_mvc_calibrations_value  CHECK (mvc_value > 0)
 );
 
 -- athlete_profile_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto

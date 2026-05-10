@@ -23,6 +23,8 @@ return new class extends Migration
         });
 
         DB::statement("ALTER TABLE athlete_profiles ADD CONSTRAINT chk_athlete_profiles_sex CHECK (sex IN ('MALE', 'FEMALE'))");
+        DB::statement("ALTER TABLE athlete_profiles ADD CONSTRAINT chk_athlete_profiles_bodyweight CHECK (bodyweight_kg BETWEEN 30 AND 300)");
+        DB::statement("ALTER TABLE athlete_profiles ADD CONSTRAINT chk_athlete_profiles_age CHECK (age_years BETWEEN 14 AND 100)");
     }
 
     public function down(): void

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AthleteProfileController;
 use App\Http\Controllers\Api\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -13,3 +14,12 @@ Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:sanct
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');
+
+Route::middleware(['auth:sanctum', 'role:athlete'])
+    ->prefix('athlete')
+    ->group(function () {
+        Route::get('profile', [AthleteProfileController::class, 'show']);
+        Route::post('profile', [AthleteProfileController::class, 'store']);
+        Route::patch('profile', [AthleteProfileController::class, 'update']);
+        Route::post('mvc', [AthleteProfileController::class, 'storeMvc']);
+    });
