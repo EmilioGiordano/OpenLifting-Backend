@@ -143,43 +143,63 @@ CREATE TABLE training_sets (
 -- session_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
 
 -- ─────────────────────────────────────────────
--- 8. REPS
+-- 8. REPS (incluye 20 columnas de muscle activations: 5 músculos × 2 lados × {avg, peak})
+-- Diseño wide en lugar de una tabla muscle_activations 1:N porque el schema de slots
+-- es cerrado (5 músculos × 2 lados, fijo por alcance de tesis), siempre se leen juntos
+-- y nunca se filtra por músculo individual. NULL = electrodo suelto / no medido.
+-- (0, 300] permite picos > 100 reales en ejercicio dinámico (el MVC test isométrico
+-- subestima el max), pero rechaza outliers groseros. Ver ADR-0001.
 -- ─────────────────────────────────────────────
 CREATE TABLE reps (
     id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     set_id      BIGINT   NOT NULL,
     rep_number  SMALLINT NOT NULL,
     duration_ms INT      NOT NULL DEFAULT 0,
+
+    -- Muscle activations: 10 slots × {avg, peak} = 20 columnas, todas nullable
+    vastus_lateralis_left_pct       FLOAT NULL, vastus_lateralis_left_peak_pct  FLOAT NULL,
+    vastus_lateralis_right_pct      FLOAT NULL, vastus_lateralis_right_peak_pct FLOAT NULL,
+    vastus_medialis_left_pct        FLOAT NULL, vastus_medialis_left_peak_pct   FLOAT NULL,
+    vastus_medialis_right_pct       FLOAT NULL, vastus_medialis_right_peak_pct  FLOAT NULL,
+    gluteus_maximus_left_pct        FLOAT NULL, gluteus_maximus_left_peak_pct   FLOAT NULL,
+    gluteus_maximus_right_pct       FLOAT NULL, gluteus_maximus_right_peak_pct  FLOAT NULL,
+    erector_spinae_left_pct         FLOAT NULL, erector_spinae_left_peak_pct    FLOAT NULL,
+    erector_spinae_right_pct        FLOAT NULL, erector_spinae_right_peak_pct   FLOAT NULL,
+    biceps_femoris_left_pct         FLOAT NULL, biceps_femoris_left_peak_pct    FLOAT NULL,
+    biceps_femoris_right_pct        FLOAT NULL, biceps_femoris_right_peak_pct   FLOAT NULL,
+
     deleted_at  TIMESTAMP         DEFAULT NULL,
 
     CONSTRAINT fk_reps_set        FOREIGN KEY (set_id) REFERENCES training_sets(id) ON DELETE RESTRICT,
-    CONSTRAINT uq_reps_rep_number UNIQUE (set_id, rep_number)
+    CONSTRAINT uq_reps_rep_number UNIQUE (set_id, rep_number),
+
+    -- 20 CHECK constraints, uno por columna. NULL pasa automáticamente (3VL).
+    CONSTRAINT chk_reps_vastus_lateralis_left_pct       CHECK (vastus_lateralis_left_pct       > 0 AND vastus_lateralis_left_pct       <= 300),
+    CONSTRAINT chk_reps_vastus_lateralis_left_peak_pct  CHECK (vastus_lateralis_left_peak_pct  > 0 AND vastus_lateralis_left_peak_pct  <= 300),
+    CONSTRAINT chk_reps_vastus_lateralis_right_pct      CHECK (vastus_lateralis_right_pct      > 0 AND vastus_lateralis_right_pct      <= 300),
+    CONSTRAINT chk_reps_vastus_lateralis_right_peak_pct CHECK (vastus_lateralis_right_peak_pct > 0 AND vastus_lateralis_right_peak_pct <= 300),
+    CONSTRAINT chk_reps_vastus_medialis_left_pct        CHECK (vastus_medialis_left_pct        > 0 AND vastus_medialis_left_pct        <= 300),
+    CONSTRAINT chk_reps_vastus_medialis_left_peak_pct   CHECK (vastus_medialis_left_peak_pct   > 0 AND vastus_medialis_left_peak_pct   <= 300),
+    CONSTRAINT chk_reps_vastus_medialis_right_pct       CHECK (vastus_medialis_right_pct       > 0 AND vastus_medialis_right_pct       <= 300),
+    CONSTRAINT chk_reps_vastus_medialis_right_peak_pct  CHECK (vastus_medialis_right_peak_pct  > 0 AND vastus_medialis_right_peak_pct  <= 300),
+    CONSTRAINT chk_reps_gluteus_maximus_left_pct        CHECK (gluteus_maximus_left_pct        > 0 AND gluteus_maximus_left_pct        <= 300),
+    CONSTRAINT chk_reps_gluteus_maximus_left_peak_pct   CHECK (gluteus_maximus_left_peak_pct   > 0 AND gluteus_maximus_left_peak_pct   <= 300),
+    CONSTRAINT chk_reps_gluteus_maximus_right_pct       CHECK (gluteus_maximus_right_pct       > 0 AND gluteus_maximus_right_pct       <= 300),
+    CONSTRAINT chk_reps_gluteus_maximus_right_peak_pct  CHECK (gluteus_maximus_right_peak_pct  > 0 AND gluteus_maximus_right_peak_pct  <= 300),
+    CONSTRAINT chk_reps_erector_spinae_left_pct         CHECK (erector_spinae_left_pct         > 0 AND erector_spinae_left_pct         <= 300),
+    CONSTRAINT chk_reps_erector_spinae_left_peak_pct    CHECK (erector_spinae_left_peak_pct    > 0 AND erector_spinae_left_peak_pct    <= 300),
+    CONSTRAINT chk_reps_erector_spinae_right_pct        CHECK (erector_spinae_right_pct        > 0 AND erector_spinae_right_pct        <= 300),
+    CONSTRAINT chk_reps_erector_spinae_right_peak_pct   CHECK (erector_spinae_right_peak_pct   > 0 AND erector_spinae_right_peak_pct   <= 300),
+    CONSTRAINT chk_reps_biceps_femoris_left_pct         CHECK (biceps_femoris_left_pct         > 0 AND biceps_femoris_left_pct         <= 300),
+    CONSTRAINT chk_reps_biceps_femoris_left_peak_pct    CHECK (biceps_femoris_left_peak_pct    > 0 AND biceps_femoris_left_peak_pct    <= 300),
+    CONSTRAINT chk_reps_biceps_femoris_right_pct        CHECK (biceps_femoris_right_pct        > 0 AND biceps_femoris_right_pct        <= 300),
+    CONSTRAINT chk_reps_biceps_femoris_right_peak_pct   CHECK (biceps_femoris_right_peak_pct   > 0 AND biceps_femoris_right_peak_pct   <= 300)
 );
 
 -- set_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
 
 -- ─────────────────────────────────────────────
--- 9. MUSCLE ACTIVATIONS (por rep, músculo y lado)
--- ─────────────────────────────────────────────
-CREATE TABLE muscle_activations (
-    id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    rep_id           BIGINT      NOT NULL,
-    muscle           VARCHAR(30) NOT NULL,
-    side             VARCHAR(5)  NOT NULL,
-    percent_mvc      FLOAT       NOT NULL,
-    peak_percent_mvc FLOAT       NOT NULL,
-    deleted_at       TIMESTAMP            DEFAULT NULL,
-
-    CONSTRAINT fk_muscle_activations_rep     FOREIGN KEY (rep_id) REFERENCES reps(id) ON DELETE RESTRICT,
-    CONSTRAINT uq_muscle_activations_slot    UNIQUE (rep_id, muscle, side),
-    CONSTRAINT chk_muscle_activations_muscle CHECK (muscle IN ('VASTUS_LATERALIS', 'VASTUS_MEDIALIS', 'GLUTEUS_MAXIMUS', 'ERECTOR_SPINAE', 'BICEPS_FEMORIS')),
-    CONSTRAINT chk_muscle_activations_side   CHECK (side IN ('LEFT', 'RIGHT'))
-);
-
--- rep_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
-
--- ─────────────────────────────────────────────
--- 10. SET METRICS (1:1 con training_sets)
+-- 9. SET METRICS (1:1 con training_sets)
 -- La app manda los valores ya computados, el backend solo almacena.
 -- ─────────────────────────────────────────────
 CREATE TABLE set_metrics (
@@ -202,7 +222,7 @@ CREATE TABLE set_metrics (
 -- set_id ya tiene índice implícito por UNIQUE
 
 -- ─────────────────────────────────────────────
--- 11. RECOMMENDATIONS
+-- 10. RECOMMENDATIONS
 -- ─────────────────────────────────────────────
 CREATE TABLE recommendations (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
