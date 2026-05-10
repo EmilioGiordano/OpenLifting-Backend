@@ -73,7 +73,7 @@ CREATE TABLE mvc_calibrations (
     CONSTRAINT uq_mvc_calibrations_slot    UNIQUE (athlete_profile_id, muscle, side),
     CONSTRAINT chk_mvc_calibrations_muscle CHECK (muscle IN ('VASTUS_LATERALIS', 'VASTUS_MEDIALIS', 'GLUTEUS_MAXIMUS', 'ERECTOR_SPINAE', 'BICEPS_FEMORIS')),
     CONSTRAINT chk_mvc_calibrations_side   CHECK (side IN ('LEFT', 'RIGHT')),
-    CONSTRAINT chk_mvc_calibrations_value  CHECK (mvc_value > 0)
+    CONSTRAINT chk_mvc_calibrations_value  CHECK (mvc_value > 0 AND mvc_value <= 100)
 );
 
 -- athlete_profile_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto

@@ -19,7 +19,9 @@ class MvcCalibrationFactory extends Factory
             'athlete_profile_id' => AthleteProfile::factory(),
             'muscle' => fake()->randomElement(Muscle::cases())->value,
             'side' => fake()->randomElement(MuscleSide::cases())->value,
-            'mvc_value' => fake()->randomFloat(4, 0.3, 1.0),
+            // %MVC in (0, 100]; realistic captures fall in [70, 99] due to
+            // neural inhibition during voluntary maximal contractions.
+            'mvc_value' => fake()->randomFloat(2, 70, 99),
             'recorded_at' => now(),
         ];
     }

@@ -20,7 +20,8 @@ class StoreMvcCalibrationsRequest extends FormRequest
             'calibrations' => ['required', 'array', 'min:1'],
             'calibrations.*.muscle' => ['required', new Enum(Muscle::class)],
             'calibrations.*.side' => ['required', new Enum(MuscleSide::class)],
-            'calibrations.*.mvc_value' => ['required', 'numeric', 'gt:0'],
+            // mvc_value is %MVC in (0, 100]; see docs/adr/0001-emg-data-scale.md.
+            'calibrations.*.mvc_value' => ['required', 'numeric', 'gt:0', 'max:100'],
         ];
     }
 }

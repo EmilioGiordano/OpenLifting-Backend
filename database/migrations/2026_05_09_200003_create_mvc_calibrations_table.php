@@ -23,7 +23,8 @@ return new class extends Migration
 
         DB::statement("ALTER TABLE mvc_calibrations ADD CONSTRAINT chk_mvc_calibrations_muscle CHECK (muscle IN ('VASTUS_LATERALIS', 'VASTUS_MEDIALIS', 'GLUTEUS_MAXIMUS', 'ERECTOR_SPINAE', 'BICEPS_FEMORIS'))");
         DB::statement("ALTER TABLE mvc_calibrations ADD CONSTRAINT chk_mvc_calibrations_side CHECK (side IN ('LEFT', 'RIGHT'))");
-        DB::statement("ALTER TABLE mvc_calibrations ADD CONSTRAINT chk_mvc_calibrations_value CHECK (mvc_value > 0)");
+        // mvc_value is %MVC in (0, 100]; see docs/adr/0001-emg-data-scale.md.
+        DB::statement("ALTER TABLE mvc_calibrations ADD CONSTRAINT chk_mvc_calibrations_value CHECK (mvc_value > 0 AND mvc_value <= 100)");
     }
 
     public function down(): void

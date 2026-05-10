@@ -23,9 +23,9 @@ class StoreMvcCalibrationsTest extends TestCase
 
         $response = $this->postJson('/api/athlete/mvc', [
             'calibrations' => [
-                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 0.83],
-                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'RIGHT', 'mvc_value' => 0.79],
-                ['muscle' => 'GLUTEUS_MAXIMUS', 'side' => 'LEFT', 'mvc_value' => 0.91],
+                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 83.5],
+                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'RIGHT', 'mvc_value' => 79.2],
+                ['muscle' => 'GLUTEUS_MAXIMUS', 'side' => 'LEFT', 'mvc_value' => 91.7],
             ],
         ]);
 
@@ -33,7 +33,7 @@ class StoreMvcCalibrationsTest extends TestCase
             ->assertJsonCount(3)
             ->assertJsonPath('0.muscle', 'VASTUS_LATERALIS')
             ->assertJsonPath('0.side', 'LEFT')
-            ->assertJsonPath('0.mvc_value', 0.83);
+            ->assertJsonPath('0.mvc_value', 83.5);
 
         $this->assertDatabaseCount('mvc_calibrations', 3);
         $this->assertNotNull($profile->fresh()->calibrated_at);
@@ -47,7 +47,7 @@ class StoreMvcCalibrationsTest extends TestCase
 
         $payload = [
             'calibrations' => [
-                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 0.5],
+                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 55.5],
             ],
         ];
 
@@ -55,7 +55,7 @@ class StoreMvcCalibrationsTest extends TestCase
         $this->assertDatabaseCount('mvc_calibrations', 1);
 
         // Re-post with a new value
-        $payload['calibrations'][0]['mvc_value'] = 0.9;
+        $payload['calibrations'][0]['mvc_value'] = 95.5;
         $this->postJson('/api/athlete/mvc', $payload)->assertOk();
 
         $this->assertDatabaseCount('mvc_calibrations', 1); // upsert, not insert
@@ -63,7 +63,7 @@ class StoreMvcCalibrationsTest extends TestCase
             'athlete_profile_id' => $profile->id,
             'muscle' => 'VASTUS_LATERALIS',
             'side' => 'LEFT',
-            'mvc_value' => 0.9,
+            'mvc_value' => 95.5,
         ]);
     }
 
@@ -74,7 +74,7 @@ class StoreMvcCalibrationsTest extends TestCase
 
         $response = $this->postJson('/api/athlete/mvc', [
             'calibrations' => [
-                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 0.83],
+                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 83.5],
             ],
         ]);
 
@@ -104,7 +104,7 @@ class StoreMvcCalibrationsTest extends TestCase
 
         $response = $this->postJson('/api/athlete/mvc', [
             'calibrations' => [
-                ['muscle' => 'BICEPS_BRACHII', 'side' => 'LEFT', 'mvc_value' => 0.5],
+                ['muscle' => 'BICEPS_BRACHII', 'side' => 'LEFT', 'mvc_value' => 50.5],
             ],
         ]);
 
@@ -120,7 +120,7 @@ class StoreMvcCalibrationsTest extends TestCase
 
         $response = $this->postJson('/api/athlete/mvc', [
             'calibrations' => [
-                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'CENTER', 'mvc_value' => 0.5],
+                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'CENTER', 'mvc_value' => 50.5],
             ],
         ]);
 
@@ -144,6 +144,37 @@ class StoreMvcCalibrationsTest extends TestCase
             ->assertJsonValidationErrors('calibrations.0.mvc_value');
     }
 
+    public function test_rejects_mvc_value_above_100(): void
+    {
+        $user = User::factory()->create();
+        AthleteProfile::factory()->create(['user_id' => $user->id]);
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/athlete/mvc', [
+            'calibrations' => [
+                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 150],
+            ],
+        ]);
+
+        $response->assertUnprocessable()
+            ->assertJsonValidationErrors('calibrations.0.mvc_value');
+    }
+
+    public function test_accepts_boundary_value_100(): void
+    {
+        $user = User::factory()->create();
+        AthleteProfile::factory()->create(['user_id' => $user->id]);
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/athlete/mvc', [
+            'calibrations' => [
+                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 100],
+            ],
+        ]);
+
+        $response->assertOk();
+    }
+
     public function test_instructor_cannot_post_calibrations(): void
     {
         $instructor = User::factory()->instructor()->create();
@@ -151,7 +182,7 @@ class StoreMvcCalibrationsTest extends TestCase
 
         $response = $this->postJson('/api/athlete/mvc', [
             'calibrations' => [
-                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 0.5],
+                ['muscle' => 'VASTUS_LATERALIS', 'side' => 'LEFT', 'mvc_value' => 50.5],
             ],
         ]);
 
