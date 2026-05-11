@@ -69,6 +69,16 @@ class User extends Authenticatable
             ->withPivot(['linked_at', 'deleted_at']);
     }
 
+    public function createdGuests(): HasMany
+    {
+        return $this->hasMany(GuestProfile::class, 'created_by_user_id');
+    }
+
+    public function claimedGuests(): HasMany
+    {
+        return $this->hasMany(GuestProfile::class, 'claimed_by_user_id');
+    }
+
     public function isAthlete(): bool
     {
         return $this->role->name === UserRole::ATHLETE->value;

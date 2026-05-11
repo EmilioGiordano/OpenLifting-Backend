@@ -2,6 +2,9 @@
 
 use App\Http\Controllers\Api\AthleteProfileController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ClaimController;
+use App\Http\Controllers\Api\InstructorGuestController;
+use App\Http\Controllers\Api\InstructorSessionController;
 use App\Http\Controllers\Api\SessionController;
 use App\Http\Controllers\Api\SetController;
 use Illuminate\Http\Request;
@@ -31,4 +34,18 @@ Route::middleware(['auth:sanctum', 'role:athlete'])->group(function () {
     Route::put('sessions/{session}/end', [SessionController::class, 'end']);
 
     Route::post('sessions/{session}/sets', [SetController::class, 'store']);
+
+    // Canjear código de invitación. Throttle anti-brute-force.
+    Route::post('claim', [ClaimController::class, 'redeem'])->middleware('throttle:10,5');
+});
+
+Route::middleware(['auth:sanctum', 'role:instructor'])->group(function () {
+    Route::prefix('instructor')->group(function () {
+        Route::get('guests', [InstructorGuestController::class, 'index']);
+        Route::post('guests', [InstructorGuestController::class, 'store']);
+        Route::post('guests/{guest}/mvc', [InstructorGuestController::class, 'storeMvc']);
+
+        Route::post('sessions', [InstructorSessionController::class, 'store']);
+        Route::post('sessions/{session}/claim-code', [InstructorSessionController::class, 'generateClaimCode']);
+    });
 });

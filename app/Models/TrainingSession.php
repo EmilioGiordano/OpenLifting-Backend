@@ -15,6 +15,7 @@ class TrainingSession extends Model
 
     protected $fillable = [
         'athlete_user_id',
+        'guest_profile_id',
         'instructor_user_id',
         'exercise',
         'started_at',
@@ -46,8 +47,18 @@ class TrainingSession extends Model
         return $this->belongsTo(User::class, 'instructor_user_id');
     }
 
+    public function guestProfile(): BelongsTo
+    {
+        return $this->belongsTo(GuestProfile::class);
+    }
+
     public function sets(): HasMany
     {
         return $this->hasMany(TrainingSet::class, 'session_id');
+    }
+
+    public function claimCodes(): HasMany
+    {
+        return $this->hasMany(ClaimCode::class, 'session_id');
     }
 }
