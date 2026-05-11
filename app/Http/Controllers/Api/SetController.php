@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Api\StoreSetRequest;
 use App\Http\Resources\SetResource;
 use App\Models\Rep;
+use App\Models\TrainingSession;
 use App\Models\TrainingSet;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,9 +16,19 @@ class SetController extends Controller
 {
     public function store(StoreSetRequest $request, int $sessionId): JsonResponse
     {
-        $session = $request->user()
-            ->trainingSessions()
-            ->findOrFail($sessionId);
+        $user = $request->user();
+
+        // Autorización dual: athlete dueño de la sesión, O instructor que la
+        // creó para un guest todavía no reclamado. Cualquier otro caso → 404.
+        $session = TrainingSession::where('id', $sessionId)
+            ->where(function ($q) use ($user) {
+                $q->where('athlete_user_id', $user->id)
+                    ->orWhere(function ($q2) use ($user) {
+                        $q2->where('instructor_user_id', $user->id)
+                            ->whereNotNull('guest_profile_id');
+                    });
+            })
+            ->firstOrFail();
 
         if ($session->ended_at !== null) {
             return response()->json([

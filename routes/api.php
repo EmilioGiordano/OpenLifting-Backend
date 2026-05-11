@@ -30,10 +30,6 @@ Route::middleware(['auth:sanctum', 'role:athlete'])->group(function () {
 
     Route::get('sessions', [SessionController::class, 'index']);
     Route::post('sessions', [SessionController::class, 'store']);
-    Route::patch('sessions/{session}', [SessionController::class, 'patch']);
-    Route::put('sessions/{session}/end', [SessionController::class, 'end']);
-
-    Route::post('sessions/{session}/sets', [SetController::class, 'store']);
 
     // Canjear código de invitación. Throttle anti-brute-force.
     Route::post('claim', [ClaimController::class, 'redeem'])->middleware('throttle:10,5');
@@ -48,4 +44,14 @@ Route::middleware(['auth:sanctum', 'role:instructor'])->group(function () {
         Route::post('sessions', [InstructorSessionController::class, 'store']);
         Route::post('sessions/{session}/claim-code', [InstructorSessionController::class, 'generateClaimCode']);
     });
+});
+
+// Endpoints de sesión con autorización dual (athlete dueño O instructor de
+// sesión guest). La auth fina la hace el controller via firstOrFail() sobre
+// una query que matchea ambos casos.
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('sessions/{session}', [SessionController::class, 'show']);
+    Route::patch('sessions/{session}', [SessionController::class, 'patch']);
+    Route::put('sessions/{session}/end', [SessionController::class, 'end']);
+    Route::post('sessions/{session}/sets', [SetController::class, 'store']);
 });

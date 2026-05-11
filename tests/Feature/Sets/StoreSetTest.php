@@ -146,13 +146,58 @@ class StoreSetTest extends TestCase
             ->assertNotFound();
     }
 
-    public function test_instructor_cannot_post_sets(): void
+    public function test_instructor_without_matching_session_gets_404(): void
     {
+        // El endpoint /sessions/{id}/sets ahora acepta también al instructor de
+        // sesiones guest, así que el rechazo a un instructor random no pasa por
+        // role middleware — pasa por la query del controller (firstOrFail → 404).
         $instructor = User::factory()->instructor()->create();
         Sanctum::actingAs($instructor);
 
         $this->postJson('/api/sessions/1/sets', $this->validPayload())
-            ->assertForbidden();
+            ->assertNotFound();
+    }
+
+    public function test_instructor_can_post_sets_to_their_guest_session(): void
+    {
+        $instructor = User::factory()->instructor()->create();
+        $guest = \App\Models\GuestProfile::factory()->create([
+            'created_by_user_id' => $instructor->id,
+        ]);
+        $session = TrainingSession::factory()->create([
+            'athlete_user_id' => null,
+            'guest_profile_id' => $guest->id,
+            'instructor_user_id' => $instructor->id,
+        ]);
+        Sanctum::actingAs($instructor);
+
+        $response = $this->postJson("/api/sessions/{$session->id}/sets", $this->validPayload());
+
+        $response->assertCreated()
+            ->assertJsonPath('set_number', 1);
+
+        $this->assertDatabaseHas('training_sets', [
+            'session_id' => $session->id,
+            'set_number' => 1,
+        ]);
+    }
+
+    public function test_instructor_cannot_post_sets_to_another_instructors_session(): void
+    {
+        $instructorA = User::factory()->instructor()->create();
+        $instructorB = User::factory()->instructor()->create();
+        $guest = \App\Models\GuestProfile::factory()->create([
+            'created_by_user_id' => $instructorB->id,
+        ]);
+        $session = TrainingSession::factory()->create([
+            'athlete_user_id' => null,
+            'guest_profile_id' => $guest->id,
+            'instructor_user_id' => $instructorB->id,
+        ]);
+        Sanctum::actingAs($instructorA);
+
+        $this->postJson("/api/sessions/{$session->id}/sets", $this->validPayload())
+            ->assertNotFound();
     }
 
     public function test_unauthenticated_request_returns_401(): void

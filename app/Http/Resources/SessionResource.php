@@ -16,6 +16,12 @@ class SessionResource extends JsonResource
             'ended_at' => $this->ended_at,
             'device_source' => $this->device_source,
             'created_at' => $this->created_at,
+            // Only emitted by GET /api/sessions/{id} which eager-loads sets.
+            // List/POST/PUT/PATCH responses omit this key entirely.
+            'sets' => $this->when(
+                $this->relationLoaded('sets'),
+                fn () => SetResource::collection($this->sets),
+            ),
         ];
     }
 }
