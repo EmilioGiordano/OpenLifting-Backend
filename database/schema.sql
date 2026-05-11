@@ -57,29 +57,102 @@ CREATE TABLE athlete_profiles (
 -- user_id ya tiene índice implícito por UNIQUE
 
 -- ─────────────────────────────────────────────
--- 4. MVC CALIBRATIONS
--- Un valor vigente por músculo+lado (upsert al recalibrar)
+-- 4. GUEST PROFILES
+-- Atleta sin cuenta creado por un instructor para registrar una sesión en frío.
+-- Al reclamar (POST /api/claim con un claim_code), claimed_by_user_id se setea
+-- al user_id del atleta que se hizo cuenta, y los datos de calibración +
+-- la sesión asociada se transfieren al athlete_profile real (los registros
+-- del guest se conservan para auditoría).
 -- ─────────────────────────────────────────────
-CREATE TABLE mvc_calibrations (
+CREATE TABLE guest_profiles (
     id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    athlete_profile_id BIGINT      NOT NULL,
-    muscle             VARCHAR(30) NOT NULL,
-    side               VARCHAR(5)  NOT NULL,
-    mvc_value          FLOAT       NOT NULL,
-    recorded_at        TIMESTAMP   NOT NULL DEFAULT now(),
-    deleted_at         TIMESTAMP            DEFAULT NULL,
+    created_by_user_id BIGINT       NOT NULL,
+    claimed_by_user_id BIGINT           NULL,
+    first_name         VARCHAR(100) NOT NULL,
+    last_name          VARCHAR(100) NOT NULL,
+    bodyweight_kg      DECIMAL(5,2) NOT NULL,
+    age_years          SMALLINT     NOT NULL,
+    sex                VARCHAR(10)  NOT NULL,
+    calibrated_at      TIMESTAMP        NULL,
+    claimed_at         TIMESTAMP        NULL,
+    created_at         TIMESTAMP    NOT NULL DEFAULT now(),
+    updated_at         TIMESTAMP             DEFAULT now(),
+    deleted_at         TIMESTAMP             DEFAULT NULL,
 
-    CONSTRAINT fk_mvc_calibrations_profile FOREIGN KEY (athlete_profile_id) REFERENCES athlete_profiles(id) ON DELETE RESTRICT,
-    CONSTRAINT uq_mvc_calibrations_slot    UNIQUE (athlete_profile_id, muscle, side),
-    CONSTRAINT chk_mvc_calibrations_muscle CHECK (muscle IN ('VASTUS_LATERALIS', 'VASTUS_MEDIALIS', 'GLUTEUS_MAXIMUS', 'ERECTOR_SPINAE', 'BICEPS_FEMORIS')),
-    CONSTRAINT chk_mvc_calibrations_side   CHECK (side IN ('LEFT', 'RIGHT')),
-    CONSTRAINT chk_mvc_calibrations_value  CHECK (mvc_value > 0 AND mvc_value <= 100)
+    CONSTRAINT fk_guest_profiles_creator     FOREIGN KEY (created_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_guest_profiles_claimer     FOREIGN KEY (claimed_by_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+    CONSTRAINT chk_guest_profiles_sex        CHECK (sex IN ('MALE', 'FEMALE')),
+    CONSTRAINT chk_guest_profiles_bodyweight CHECK (bodyweight_kg BETWEEN 30 AND 300),
+    CONSTRAINT chk_guest_profiles_age        CHECK (age_years BETWEEN 14 AND 100),
+    -- claimed_at va de la mano con claimed_by_user_id: ambos NULL o ambos NOT NULL
+    CONSTRAINT chk_guest_profiles_claim_pair CHECK (
+        (claimed_by_user_id IS NULL AND claimed_at IS NULL)
+        OR
+        (claimed_by_user_id IS NOT NULL AND claimed_at IS NOT NULL)
+    )
 );
 
--- athlete_profile_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
+CREATE INDEX idx_guest_profiles_creator ON guest_profiles(created_by_user_id);
+CREATE INDEX idx_guest_profiles_claimer ON guest_profiles(claimed_by_user_id);
 
 -- ─────────────────────────────────────────────
--- 5. INSTRUCTOR ↔ ATHLETE (pivot)
+-- 5. MVC CALIBRATIONS
+-- 1 fila por sujeto (athlete_profile O guest_profile, XOR). Layout wide:
+-- 10 columnas %MVC, una por slot (5 músculos × 2 lados). NULL = ese slot no
+-- se calibró todavía. Valores en (0, 100] — el MVC es el peak normalizado del
+-- test isométrico por definición. Ver ADR-0001.
+-- ─────────────────────────────────────────────
+CREATE TABLE mvc_calibrations (
+    id                       BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    athlete_profile_id       BIGINT     NULL,
+    guest_profile_id         BIGINT     NULL,
+
+    vastus_lateralis_left    FLOAT      NULL,
+    vastus_lateralis_right   FLOAT      NULL,
+    vastus_medialis_left     FLOAT      NULL,
+    vastus_medialis_right    FLOAT      NULL,
+    gluteus_maximus_left     FLOAT      NULL,
+    gluteus_maximus_right    FLOAT      NULL,
+    erector_spinae_left      FLOAT      NULL,
+    erector_spinae_right     FLOAT      NULL,
+    biceps_femoris_left      FLOAT      NULL,
+    biceps_femoris_right     FLOAT      NULL,
+
+    recorded_at              TIMESTAMP  NOT NULL DEFAULT now(),
+    deleted_at               TIMESTAMP           DEFAULT NULL,
+
+    CONSTRAINT fk_mvc_calibrations_athlete FOREIGN KEY (athlete_profile_id) REFERENCES athlete_profiles(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_mvc_calibrations_guest   FOREIGN KEY (guest_profile_id)   REFERENCES guest_profiles(id)   ON DELETE RESTRICT,
+    -- XOR: exactamente uno de los dos profiles tiene que estar seteado
+    CONSTRAINT chk_mvc_calibrations_owner  CHECK (
+        (athlete_profile_id IS NOT NULL)::int + (guest_profile_id IS NOT NULL)::int = 1
+    ),
+    -- 10 CHECK constraints, uno por columna. NULL pasa automáticamente (3VL).
+    CONSTRAINT chk_mvc_vastus_lateralis_left  CHECK (vastus_lateralis_left  > 0 AND vastus_lateralis_left  <= 100),
+    CONSTRAINT chk_mvc_vastus_lateralis_right CHECK (vastus_lateralis_right > 0 AND vastus_lateralis_right <= 100),
+    CONSTRAINT chk_mvc_vastus_medialis_left   CHECK (vastus_medialis_left   > 0 AND vastus_medialis_left   <= 100),
+    CONSTRAINT chk_mvc_vastus_medialis_right  CHECK (vastus_medialis_right  > 0 AND vastus_medialis_right  <= 100),
+    CONSTRAINT chk_mvc_gluteus_maximus_left   CHECK (gluteus_maximus_left   > 0 AND gluteus_maximus_left   <= 100),
+    CONSTRAINT chk_mvc_gluteus_maximus_right  CHECK (gluteus_maximus_right  > 0 AND gluteus_maximus_right  <= 100),
+    CONSTRAINT chk_mvc_erector_spinae_left    CHECK (erector_spinae_left    > 0 AND erector_spinae_left    <= 100),
+    CONSTRAINT chk_mvc_erector_spinae_right   CHECK (erector_spinae_right   > 0 AND erector_spinae_right   <= 100),
+    CONSTRAINT chk_mvc_biceps_femoris_left    CHECK (biceps_femoris_left    > 0 AND biceps_femoris_left    <= 100),
+    CONSTRAINT chk_mvc_biceps_femoris_right   CHECK (biceps_femoris_right   > 0 AND biceps_femoris_right   <= 100)
+);
+
+-- 1:1 con el profile (XOR enforced arriba). Partial unique indexes porque la
+-- columna del otro tipo está NULL y un UNIQUE compuesto trataría a los NULL
+-- como distintos (permitiría duplicados del lado contrario).
+CREATE UNIQUE INDEX uq_mvc_calibrations_athlete
+    ON mvc_calibrations (athlete_profile_id)
+    WHERE athlete_profile_id IS NOT NULL;
+
+CREATE UNIQUE INDEX uq_mvc_calibrations_guest
+    ON mvc_calibrations (guest_profile_id)
+    WHERE guest_profile_id IS NOT NULL;
+
+-- ─────────────────────────────────────────────
+-- 6. INSTRUCTOR ↔ ATHLETE (pivot)
 -- ─────────────────────────────────────────────
 CREATE TABLE instructor_athlete (
     instructor_id BIGINT    NOT NULL,
@@ -96,11 +169,17 @@ CREATE INDEX idx_instructor_athlete_athlete_id ON instructor_athlete(athlete_id)
 -- instructor_id ya tiene índice implícito por ser primera columna del PK compuesto
 
 -- ─────────────────────────────────────────────
--- 6. TRAINING SESSIONS
+-- 7. TRAINING SESSIONS
+-- El sujeto de la sesión es un athlete (athlete_user_id) O un guest
+-- (guest_profile_id) — XOR enforced por CHECK. Al reclamar un guest, la fila
+-- pivota: athlete_user_id pasa a estar seteado y guest_profile_id se nulea.
+-- instructor_user_id queda NOT NULL cuando un instructor levantó la sesión
+-- en nombre del sujeto, NULL cuando el athlete se auto-registró.
 -- ─────────────────────────────────────────────
 CREATE TABLE training_sessions (
     id                 BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    athlete_user_id    BIGINT      NOT NULL,
+    athlete_user_id    BIGINT      NULL,
+    guest_profile_id   BIGINT      NULL,
     instructor_user_id BIGINT      NULL,
     exercise           VARCHAR(50) NOT NULL DEFAULT 'back_squat',
     started_at         TIMESTAMP   NOT NULL,
@@ -110,16 +189,22 @@ CREATE TABLE training_sessions (
     updated_at         TIMESTAMP            DEFAULT now(),
     deleted_at         TIMESTAMP            DEFAULT NULL,
 
-    CONSTRAINT fk_training_sessions_athlete    FOREIGN KEY (athlete_user_id)    REFERENCES users(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_training_sessions_instructor FOREIGN KEY (instructor_user_id) REFERENCES users(id) ON DELETE SET NULL,
-    CONSTRAINT chk_training_sessions_source    CHECK (device_source IN ('REAL', 'SIMULATED'))
+    CONSTRAINT fk_training_sessions_athlete    FOREIGN KEY (athlete_user_id)    REFERENCES users(id)           ON DELETE RESTRICT,
+    CONSTRAINT fk_training_sessions_guest      FOREIGN KEY (guest_profile_id)   REFERENCES guest_profiles(id)  ON DELETE RESTRICT,
+    CONSTRAINT fk_training_sessions_instructor FOREIGN KEY (instructor_user_id) REFERENCES users(id)           ON DELETE SET NULL,
+    CONSTRAINT chk_training_sessions_source    CHECK (device_source IN ('REAL', 'SIMULATED')),
+    -- XOR: exactamente uno de los dos sujetos
+    CONSTRAINT chk_training_sessions_subject   CHECK (
+        (athlete_user_id IS NOT NULL)::int + (guest_profile_id IS NOT NULL)::int = 1
+    )
 );
 
 CREATE INDEX idx_training_sessions_athlete    ON training_sessions(athlete_user_id);
+CREATE INDEX idx_training_sessions_guest      ON training_sessions(guest_profile_id);
 CREATE INDEX idx_training_sessions_instructor ON training_sessions(instructor_user_id);
 
 -- ─────────────────────────────────────────────
--- 7. TRAINING SETS
+-- 8. TRAINING SETS
 -- ─────────────────────────────────────────────
 CREATE TABLE training_sets (
     id          BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -143,7 +228,7 @@ CREATE TABLE training_sets (
 -- session_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
 
 -- ─────────────────────────────────────────────
--- 8. REPS (incluye 20 columnas de muscle activations: 5 músculos × 2 lados × {avg, peak})
+-- 9. REPS (incluye 20 columnas de muscle activations: 5 músculos × 2 lados × {avg, peak})
 -- Diseño wide en lugar de una tabla muscle_activations 1:N porque el schema de slots
 -- es cerrado (5 músculos × 2 lados, fijo por alcance de tesis), siempre se leen juntos
 -- y nunca se filtra por músculo individual. NULL = electrodo suelto / no medido.
@@ -199,7 +284,7 @@ CREATE TABLE reps (
 -- set_id ya tiene índice implícito por ser primera columna del UNIQUE compuesto
 
 -- ─────────────────────────────────────────────
--- 9. SET METRICS (1:1 con training_sets)
+-- 10. SET METRICS (1:1 con training_sets)
 -- La app manda los valores ya computados, el backend solo almacena.
 -- ─────────────────────────────────────────────
 CREATE TABLE set_metrics (
@@ -222,7 +307,7 @@ CREATE TABLE set_metrics (
 -- set_id ya tiene índice implícito por UNIQUE
 
 -- ─────────────────────────────────────────────
--- 10. RECOMMENDATIONS
+-- 11. RECOMMENDATIONS
 -- ─────────────────────────────────────────────
 CREATE TABLE recommendations (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -237,3 +322,34 @@ CREATE TABLE recommendations (
 );
 
 CREATE INDEX idx_recommendations_set_id ON recommendations(set_id);
+
+-- ─────────────────────────────────────────────
+-- 12. CLAIM CODES
+-- Códigos de un solo uso que un instructor genera para una sesión guest, y que
+-- un atleta canjea vía POST /api/claim para tomar posesión de los datos.
+-- "Código activo" = used_at IS NULL AND expires_at > now(). La regla "solo
+-- un código activo por sesión" se aplica en la capa de aplicación (al generar
+-- uno nuevo, los anteriores activos quedan con expires_at = now()).
+-- ─────────────────────────────────────────────
+CREATE TABLE claim_codes (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id      BIGINT      NOT NULL,
+    code            VARCHAR(8)  NOT NULL,
+    expires_at      TIMESTAMP   NOT NULL,
+    used_at         TIMESTAMP   NULL,
+    used_by_user_id BIGINT      NULL,
+    created_at      TIMESTAMP   NOT NULL DEFAULT now(),
+    deleted_at      TIMESTAMP            DEFAULT NULL,
+
+    CONSTRAINT fk_claim_codes_session FOREIGN KEY (session_id)      REFERENCES training_sessions(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_claim_codes_user    FOREIGN KEY (used_by_user_id) REFERENCES users(id)             ON DELETE RESTRICT,
+    CONSTRAINT uq_claim_codes_code    UNIQUE (code),
+    -- used_at y used_by_user_id van de la mano: ambos NULL o ambos NOT NULL
+    CONSTRAINT chk_claim_codes_used_pair CHECK (
+        (used_at IS NULL AND used_by_user_id IS NULL)
+        OR
+        (used_at IS NOT NULL AND used_by_user_id IS NOT NULL)
+    )
+);
+
+CREATE INDEX idx_claim_codes_session ON claim_codes(session_id);
