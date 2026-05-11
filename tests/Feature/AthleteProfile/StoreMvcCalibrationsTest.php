@@ -35,7 +35,14 @@ class StoreMvcCalibrationsTest extends TestCase
             ->assertJsonPath('0.side', 'LEFT')
             ->assertJsonPath('0.mvc_value', 83.5);
 
-        $this->assertDatabaseCount('mvc_calibrations', 3);
+        // Wide layout: 1 row per profile with column-per-slot.
+        $this->assertDatabaseCount('mvc_calibrations', 1);
+        $this->assertDatabaseHas('mvc_calibrations', [
+            'athlete_profile_id' => $profile->id,
+            'vastus_lateralis_left' => 83.5,
+            'vastus_lateralis_right' => 79.2,
+            'gluteus_maximus_left' => 91.7,
+        ]);
         $this->assertNotNull($profile->fresh()->calibrated_at);
     }
 
@@ -61,9 +68,7 @@ class StoreMvcCalibrationsTest extends TestCase
         $this->assertDatabaseCount('mvc_calibrations', 1); // upsert, not insert
         $this->assertDatabaseHas('mvc_calibrations', [
             'athlete_profile_id' => $profile->id,
-            'muscle' => 'VASTUS_LATERALIS',
-            'side' => 'LEFT',
-            'mvc_value' => 95.5,
+            'vastus_lateralis_left' => 95.5,
         ]);
     }
 

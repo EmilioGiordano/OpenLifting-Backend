@@ -7,10 +7,9 @@ use App\Http\Requests\Api\StoreAthleteProfileRequest;
 use App\Http\Requests\Api\StoreMvcCalibrationsRequest;
 use App\Http\Requests\Api\UpdateAthleteProfileRequest;
 use App\Http\Resources\AthleteProfileResource;
-use App\Http\Resources\MvcCalibrationResource;
+use App\Models\MvcCalibration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -61,7 +60,7 @@ class AthleteProfileController extends Controller
         return AthleteProfileResource::make($profile->fresh());
     }
 
-    public function storeMvc(StoreMvcCalibrationsRequest $request): AnonymousResourceCollection
+    public function storeMvc(StoreMvcCalibrationsRequest $request): JsonResponse
     {
         $profile = $request->user()->athleteProfile;
 
@@ -73,28 +72,20 @@ class AthleteProfileController extends Controller
 
         $calibrations = $request->validated('calibrations');
 
-        $upserted = DB::transaction(function () use ($profile, $calibrations) {
+        $mvc = DB::transaction(function () use ($profile, $calibrations) {
             $now = now();
-            $rows = [];
+            $cols = MvcCalibration::mapCalibrationsToColumns($calibrations);
 
-            foreach ($calibrations as $cal) {
-                $rows[] = $profile->mvcCalibrations()->updateOrCreate(
-                    [
-                        'muscle' => $cal['muscle'],
-                        'side' => $cal['side'],
-                    ],
-                    [
-                        'mvc_value' => $cal['mvc_value'],
-                        'recorded_at' => $now,
-                    ],
-                );
-            }
+            $row = MvcCalibration::updateOrCreate(
+                ['athlete_profile_id' => $profile->id],
+                array_merge($cols, ['recorded_at' => $now]),
+            );
 
             $profile->update(['calibrated_at' => $now]);
 
-            return $rows;
+            return $row->fresh();
         });
 
-        return MvcCalibrationResource::collection($upserted);
+        return response()->json($mvc->calibrationsArray());
     }
 }
