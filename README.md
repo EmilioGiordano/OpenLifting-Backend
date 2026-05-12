@@ -1,59 +1,226 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Vortex
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Backend del proyecto **OpenLifting**: una API REST que recibe datos de activación muscular (EMG) capturados por sensores + ESP32 durante series de sentadillas, los persiste, y los expone a la app Android para visualización, seguimiento histórico y entrega de recomendaciones técnicas.
 
-## About Laravel
+El backend actúa como **destino de sincronización**, no como motor de cálculo: las métricas (BSA, ratios H:Q y ES:GMax, fatiga intra-set) se computan en el dispositivo móvil y se envían ya resueltas en un único POST por serie.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- Laravel 12 / PHP 8.2+
+- PostgreSQL
+- Laravel Sanctum (auth por bearer token)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Diagrama Entidad-Relación
+```mermaid
+erDiagram
+    users }o--|| roles : role
+    athlete_profiles }o--|| users : user
+    guest_profiles }o--|| users : created_by
+    guest_profiles }o--|| users : claimed_by
+    mvc_calibrations }o--|| athlete_profiles : athlete
+    mvc_calibrations }o--|| guest_profiles : guest
+    instructor_athlete }o--|| users : instructor
+    instructor_athlete }o--|| users : athlete
+    training_sessions }o--|| users : athlete
+    training_sessions }o--|| guest_profiles : guest
+    training_sessions }o--|| users : instructor
+    training_sets }o--|| training_sessions : session
+    reps }o--|| training_sets : set
+    set_metrics }o--|| training_sets : set
+    recommendations }o--|| training_sets : set
+    claim_codes }o--|| training_sessions : session
+    claim_codes }o--|| users : user
 
-## Learning Laravel
+    roles {
+        INT id
+        STRING name
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        TIMESTAMP deleted_at
+    }
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+    users {
+        BIGINT id
+        STRING email
+        STRING name
+        STRING password
+        INT role_id
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        TIMESTAMP deleted_at
+    }
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+    athlete_profiles {
+        BIGINT id
+        BIGINT user_id
+        STRING first_name
+        STRING last_name
+        FLOAT bodyweight_kg
+        INT age_years
+        STRING sex
+        TIMESTAMP calibrated_at
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        TIMESTAMP deleted_at
+    }
 
-## Laravel Sponsors
+    guest_profiles {
+        BIGINT id
+        BIGINT created_by_user_id
+        BIGINT claimed_by_user_id
+        STRING first_name
+        STRING last_name
+        FLOAT bodyweight_kg
+        INT age_years
+        STRING sex
+        TIMESTAMP calibrated_at
+        TIMESTAMP claimed_at
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        TIMESTAMP deleted_at
+    }
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+    mvc_calibrations {
+        BIGINT id
+        BIGINT athlete_profile_id
+        BIGINT guest_profile_id
+        FLOAT vastus_lateralis_left
+        FLOAT vastus_lateralis_right
+        FLOAT vastus_medialis_left
+        FLOAT vastus_medialis_right
+        FLOAT gluteus_maximus_left
+        FLOAT gluteus_maximus_right
+        FLOAT erector_spinae_left
+        FLOAT erector_spinae_right
+        FLOAT biceps_femoris_left
+        FLOAT biceps_femoris_right
+        TIMESTAMP recorded_at
+        TIMESTAMP deleted_at
+    }
 
-### Premium Partners
+    instructor_athlete {
+        BIGINT instructor_id
+        BIGINT athlete_id
+        TIMESTAMP linked_at
+        TIMESTAMP deleted_at
+    }
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+    training_sessions {
+        BIGINT id
+        BIGINT athlete_user_id
+        BIGINT guest_profile_id
+        BIGINT instructor_user_id
+        STRING exercise
+        TIMESTAMP started_at
+        TIMESTAMP ended_at
+        STRING device_source
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        TIMESTAMP deleted_at
+    }
 
-## Contributing
+    training_sets {
+        BIGINT id
+        BIGINT session_id
+        INT set_number
+        FLOAT load_kg
+        INT target_reps
+        STRING variant
+        STRING depth
+        FLOAT rpe
+        TIMESTAMP created_at
+        TIMESTAMP deleted_at
+    }
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+    reps {
+        BIGINT id
+        BIGINT set_id
+        INT rep_number
+        INT duration_ms
+        FLOAT vastus_lateralis_left_pct
+        FLOAT vastus_lateralis_left_peak_pct
+        FLOAT vastus_lateralis_right_pct
+        FLOAT vastus_lateralis_right_peak_pct
+        FLOAT vastus_medialis_left_pct
+        FLOAT vastus_medialis_left_peak_pct
+        FLOAT vastus_medialis_right_pct
+        FLOAT vastus_medialis_right_peak_pct
+        FLOAT gluteus_maximus_left_pct
+        FLOAT gluteus_maximus_left_peak_pct
+        FLOAT gluteus_maximus_right_pct
+        FLOAT gluteus_maximus_right_peak_pct
+        FLOAT erector_spinae_left_pct
+        FLOAT erector_spinae_left_peak_pct
+        FLOAT erector_spinae_right_pct
+        FLOAT erector_spinae_right_peak_pct
+        FLOAT biceps_femoris_left_pct
+        FLOAT biceps_femoris_left_peak_pct
+        FLOAT biceps_femoris_right_pct
+        FLOAT biceps_femoris_right_peak_pct
+        TIMESTAMP deleted_at
+    }
 
-## Code of Conduct
+    set_metrics {
+        BIGINT id
+        BIGINT set_id
+        FLOAT bsa_vl_pct
+        FLOAT bsa_vm_pct
+        FLOAT bsa_gmax_pct
+        FLOAT bsa_es_pct
+        FLOAT hq_ratio
+        FLOAT es_gmax_ratio
+        FLOAT intra_set_fatigue_ratio
+        INT thresholds_version
+        TIMESTAMP deleted_at
+    }
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+    recommendations {
+        BIGINT id
+        BIGINT set_id
+        STRING text
+        STRING severity
+        STRING evidence
+        TIMESTAMP deleted_at
+    }
 
-## Security Vulnerabilities
+    claim_codes {
+        BIGINT id
+        BIGINT session_id
+        STRING code
+        TIMESTAMP expires_at
+        TIMESTAMP used_at
+        BIGINT used_by_user_id
+        TIMESTAMP created_at
+        TIMESTAMP deleted_at
+    }
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## Instalación
 
-## License
+```bash
+git clone <repo-url> vortex
+cd vortex
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Configurar credenciales de PostgreSQL en `.env` (`DB_DATABASE=backend_openlifting`, usuario y contraseña según tu entorno).
+
+```bash
+php artisan migrate --seed
+```
+
+## Correr la app
+
+```bash
+php artisan serve
+```
+
+API disponible en `http://127.0.0.1:8000`.
+
+## Tests
+
+```bash
+composer test
+```
