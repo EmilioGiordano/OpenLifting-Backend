@@ -1,219 +1,575 @@
 {
-  "info": {
-    "_postman_id": "openlifting-backend-collection",
-    "name": "OpenLifting",
-    "description": "API collection for the OpenLifting backend.\n\n**Setup**\n\n1. Start the API: `php artisan serve` (defaults to http://127.0.0.1:8000).\n2. The collection variable `base_url` is preset to that URL — change it if you serve elsewhere.\n3. Run **Auth → Register (athlete)** or **Auth → Register (instructor)**. Each request randomizes the name and email via Postman dynamic vars (`{{$randomFullName}}`, `{{$randomEmail}}`), so you can hit Send repeatedly without hitting the unique-email check.\n4. After register, the response token is saved into `{{token}}` and the generated email into `{{last_email}}`.\n5. **Login** uses `{{last_email}}` so it picks up whoever you registered last. Password is fixed to `password123`.\n6. Authenticated requests (**Logout**, **Get current user**) read `{{token}}` automatically.\n\n**Phases included**\n\n- Phase 2 (Auth): register / login / logout / get current user.\n\nMore endpoints land here as later phases ship.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "item": [
-    {
-      "name": "Health check",
-      "request": {
-        "method": "GET",
-        "header": [
-          { "key": "Accept", "value": "application/json" }
-        ],
-        "url": {
-          "raw": "{{base_url}}/up",
-          "host": ["{{base_url}}"],
-          "path": ["up"]
-        },
-        "description": "Returns app + database status as JSON. 200 + status:ok if everything is reachable, 503 + status:degraded if a check fails (e.g. Postgres unreachable). Response shape:\n```\n{\n  \"status\": \"ok\",\n  \"checks\": {\n    \"app\": \"ok\",\n    \"database\": { \"status\": \"ok\", \"connection\": \"pgsql\" }\n  },\n  \"timestamp\": \"...\"\n}\n```"
-      }
+    "info": {
+        "_postman_id": "openlifting-backend-collection",
+        "name": "OpenLifting",
+        "description": "API collection for the OpenLifting backend.\n\n**Setup**\n\n1. Start the API: `php artisan serve` (defaults to http://127.0.0.1:8000).\n2. The collection variable `base_url` is preset to that URL — change it if you serve elsewhere.\n3. Run **Auth → Register (athlete)** or **Auth → Register (instructor)**. Each request randomizes the name and email via Postman dynamic vars (`{{$randomFullName}}`, `{{$randomEmail}}`), so you can hit Send repeatedly without hitting the unique-email check.\n4. After register, the response token is saved into `{{token}}` and the generated email into `{{last_email}}`.\n5. **Login** uses `{{last_email}}` so it picks up whoever you registered last. Password is fixed to `Password`.\n6. Authenticated requests read `{{token}}` automatically.\n7. Several requests chain via collection variables: `{{session_id}}`, `{{guest_id}}`, `{{claim_code}}`. Tests on the create endpoints save them automatically.\n\n**Folders**\n\n- **Auth** — register / login / logout / get current user.\n- **Athlete profile** — show / create / patch profile + MVC calibration.\n- **Sessions** — list / create / show / patch / end (athlete-owned).\n- **Sets** — POST a full set (set + reps + metrics + recommendations) in one request.\n- **Instructor** — guest profiles, instructor-owned sessions, claim codes.\n- **Claim** — athlete redeems an instructor-issued claim code to inherit a guest session.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
-    {
-      "name": "Auth",
-      "item": [
+    "item": [
         {
-          "name": "Register (athlete)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"{{$randomFullName}}\",\n  \"email\": \"{{$randomEmail}}\",\n  \"password\": \"password123\",\n  \"password_confirmation\": \"password123\",\n  \"role\": \"athlete\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/register",
-              "host": ["{{base_url}}"],
-              "path": ["api", "register"]
-            },
-            "description": "Creates an athlete user and returns `{ token, user }`. The token is saved into the `token` collection variable on success (201)."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    const body = pm.response.json();",
-                  "    if (body.token) {",
-                  "        pm.collectionVariables.set('token', body.token);",
-                  "        console.log('token saved to collection variable');",
-                  "    }",
-                  "    if (body.user && body.user.email) {",
-                  "        pm.collectionVariables.set('last_email', body.user.email);",
-                  "        console.log('last_email saved: ' + body.user.email);",
-                  "    }",
-                  "    pm.test('returns token and user', () => {",
-                  "        pm.expect(body).to.have.property('token');",
-                  "        pm.expect(body.user).to.have.property('id');",
-                  "        pm.expect(body.user.role).to.eql('athlete');",
-                  "    });",
-                  "}"
-                ]
-              }
+            "name": "Health check",
+            "request": {
+                "method": "GET",
+                "header": [{ "key": "Accept", "value": "application/json" }],
+                "url": {
+                    "raw": "{{base_url}}/up",
+                    "host": ["{{base_url}}"],
+                    "path": ["up"]
+                },
+                "description": "Returns app + database status as JSON. 200 + status:ok if everything is reachable, 503 + status:degraded if a check fails."
             }
-          ]
         },
         {
-          "name": "Register (instructor)",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Coach {{$randomFirstName}}\",\n  \"email\": \"{{$randomEmail}}\",\n  \"password\": \"password123\",\n  \"password_confirmation\": \"password123\",\n  \"role\": \"instructor\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/register",
-              "host": ["{{base_url}}"],
-              "path": ["api", "register"]
-            },
-            "description": "Same endpoint as athlete register, but with `role: instructor`. No athlete profile is created for instructors."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "    const body = pm.response.json();",
-                  "    if (body.token) {",
-                  "        pm.collectionVariables.set('token', body.token);",
-                  "    }",
-                  "    if (body.user && body.user.email) {",
-                  "        pm.collectionVariables.set('last_email', body.user.email);",
-                  "    }",
-                  "}"
-                ]
-              }
-            }
-          ]
+            "name": "Auth",
+            "item": [
+                {
+                    "name": "Register (athlete)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"{{$randomFullName}}\",\n  \"email\": \"{{$randomEmail}}\",\n  \"password\": \"Password\",\n  \"password_confirmation\": \"Password\",\n  \"role\": \"athlete\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/register",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "register"]
+                        },
+                        "description": "Creates an athlete user and returns `{ token, user }`. The token is saved into the `token` collection variable on success (201)."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    const body = pm.response.json();",
+                                    "    if (body.token) { pm.collectionVariables.set('token', body.token); }",
+                                    "    if (body.user && body.user.email) { pm.collectionVariables.set('last_email', body.user.email); }",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Register (instructor)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Coach {{$randomFirstName}}\",\n  \"email\": \"{{$randomEmail}}\",\n  \"password\": \"Password\",\n  \"password_confirmation\": \"Password\",\n  \"role\": \"instructor\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/register",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "register"]
+                        },
+                        "description": "Same endpoint as athlete register, but with `role: instructor`. No athlete profile is created for instructors."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    const body = pm.response.json();",
+                                    "    if (body.token) { pm.collectionVariables.set('token', body.token); }",
+                                    "    if (body.user && body.user.email) { pm.collectionVariables.set('last_email', body.user.email); }",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Login",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{last_email}}\",\n  \"password\": \"Password\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/login",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "login"]
+                        },
+                        "description": "Returns `{ token, user }` if credentials match. Saves token into the `token` collection variable. Throttled at 5 attempts per minute per IP."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 200) {",
+                                    "    const body = pm.response.json();",
+                                    "    if (body.token) { pm.collectionVariables.set('token', body.token); }",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/logout",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "logout"]
+                        },
+                        "description": "Revokes only the token used for this request. Returns 204 on success, 401 if the token is missing or already revoked."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 204) { pm.collectionVariables.set('token', ''); }"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get current user",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/user",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "user"]
+                        },
+                        "description": "Smoke check: returns the authenticated user from the bearer token."
+                    }
+                }
+            ]
         },
         {
-          "name": "Login",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{last_email}}\",\n  \"password\": \"password123\"\n}"
-            },
-            "url": {
-              "raw": "{{base_url}}/api/login",
-              "host": ["{{base_url}}"],
-              "path": ["api", "login"]
-            },
-            "description": "Returns `{ token, user }` if credentials match. Saves token into the `token` collection variable. Throttled at 5 attempts per minute per IP."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 200) {",
-                  "    const body = pm.response.json();",
-                  "    if (body.token) {",
-                  "        pm.collectionVariables.set('token', body.token);",
-                  "        console.log('token saved to collection variable');",
-                  "    }",
-                  "    pm.test('returns token and user', () => {",
-                  "        pm.expect(body).to.have.property('token');",
-                  "        pm.expect(body.user).to.have.property('id');",
-                  "    });",
-                  "}"
-                ]
-              }
-            }
-          ]
+            "name": "Athlete profile",
+            "item": [
+                {
+                    "name": "Show profile",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/athlete/profile",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "athlete", "profile"]
+                        },
+                        "description": "Returns the authenticated athlete's profile (1:1 with user). 404 if not yet created."
+                    }
+                },
+                {
+                    "name": "Create profile",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"first_name\": \"John\",\n  \"last_name\": \"Carpener\",\n  \"bodyweight_kg\": 82.5,\n  \"age_years\": 28,\n  \"sex\": \"MALE\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/athlete/profile",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "athlete", "profile"]
+                        },
+                        "description": "Creates the athlete profile (1:1 with user). `sex` ∈ MALE|FEMALE. Fails 422 if a profile already exists."
+                    }
+                },
+                {
+                    "name": "Patch profile",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"bodyweight_kg\": 84.0\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/athlete/profile",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "athlete", "profile"]
+                        },
+                        "description": "Partial update — any subset of first_name, last_name, bodyweight_kg, age_years, sex."
+                    }
+                },
+                {
+                    "name": "Upsert MVC calibrations",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"calibrations\": [\n    { \"muscle\": \"VASTUS_LATERALIS\", \"side\": \"LEFT\",  \"mvc_value\": 83.5 },\n    { \"muscle\": \"VASTUS_LATERALIS\", \"side\": \"RIGHT\", \"mvc_value\": 79.2 },\n    { \"muscle\": \"VASTUS_MEDIALIS\",  \"side\": \"LEFT\",  \"mvc_value\": 80.1 },\n    { \"muscle\": \"VASTUS_MEDIALIS\",  \"side\": \"RIGHT\", \"mvc_value\": 78.4 },\n    { \"muscle\": \"GLUTEUS_MAXIMUS\",  \"side\": \"LEFT\",  \"mvc_value\": 90.0 },\n    { \"muscle\": \"GLUTEUS_MAXIMUS\",  \"side\": \"RIGHT\", \"mvc_value\": 88.7 },\n    { \"muscle\": \"ERECTOR_SPINAE\",   \"side\": \"LEFT\",  \"mvc_value\": 77.0 },\n    { \"muscle\": \"ERECTOR_SPINAE\",   \"side\": \"RIGHT\", \"mvc_value\": 78.1 },\n    { \"muscle\": \"BICEPS_FEMORIS\",   \"side\": \"LEFT\",  \"mvc_value\": 75.4 },\n    { \"muscle\": \"BICEPS_FEMORIS\",   \"side\": \"RIGHT\", \"mvc_value\": 73.8 }\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/athlete/mvc",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "athlete", "mvc"]
+                        },
+                        "description": "Upserts the MVC calibration row for the authenticated athlete (1 row per profile, wide layout: 5 muscles × 2 sides). `mvc_value` is %MVC in (0, 100]. Re-posting overwrites in place."
+                    }
+                }
+            ]
         },
         {
-          "name": "Logout",
-          "request": {
-            "method": "POST",
-            "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/logout",
-              "host": ["{{base_url}}"],
-              "path": ["api", "logout"]
-            },
-            "description": "Revokes only the token used for this request (other tokens for the same user keep working). Returns 204 on success, 401 if the token is missing or already revoked."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 204) {",
-                  "    pm.collectionVariables.set('token', '');",
-                  "    console.log('token cleared from collection variable');",
-                  "}"
-                ]
-              }
-            }
-          ]
+            "name": "Sessions",
+            "item": [
+                {
+                    "name": "List sessions",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/sessions",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "sessions"]
+                        },
+                        "description": "Paginated list of the authenticated athlete's sessions, ordered by started_at DESC. 15 per page. Athlete-only (instructors get 403)."
+                    }
+                },
+                {
+                    "name": "Create session",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"exercise\": \"back_squat\",\n  \"started_at\": \"{{$isoTimestamp}}\",\n  \"device_source\": \"SIMULATED\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/sessions",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "sessions"]
+                        },
+                        "description": "Creates a training session. `started_at` required, `exercise` default back_squat, `device_source` ∈ REAL|SIMULATED (default SIMULATED). Saves the new id into `{{session_id}}`."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    const body = pm.response.json();",
+                                    "    if (body.id) { pm.collectionVariables.set('session_id', body.id); }",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Show session",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/sessions/{{session_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "sessions", "{{session_id}}"]
+                        },
+                        "description": "Returns the session plus its full nested `sets[]` (each with reps, metrics, recommendations). 404 if not owned by the requester."
+                    }
+                },
+                {
+                    "name": "Patch session",
+                    "request": {
+                        "method": "PATCH",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"device_source\": \"REAL\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/sessions/{{session_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "sessions", "{{session_id}}"]
+                        },
+                        "description": "Patches mutable fields of a session. Currently only `device_source` (REAL|SIMULATED)."
+                    }
+                },
+                {
+                    "name": "End session",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"ended_at\": \"{{$isoTimestamp}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/sessions/{{session_id}}/end",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "sessions", "{{session_id}}", "end"]
+                        },
+                        "description": "Marks a session as ended. Idempotent. 404 if not owned by the requester."
+                    }
+                }
+            ]
         },
         {
-          "name": "Get current user",
-          "request": {
-            "method": "GET",
-            "header": [
-              { "key": "Accept", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
-            ],
-            "url": {
-              "raw": "{{base_url}}/api/user",
-              "host": ["{{base_url}}"],
-              "path": ["api", "user"]
-            },
-            "description": "Smoke check: returns the authenticated user from the bearer token. Useful for verifying that a token is still valid."
-          }
+            "name": "Sets",
+            "item": [
+                {
+                    "name": "Store set (full payload)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"set_number\": 1,\n  \"load_kg\": 100.0,\n  \"target_reps\": 5,\n  \"variant\": \"LOW_BAR\",\n  \"depth\": \"PARALLEL\",\n  \"rpe\": 8.0,\n  \"reps\": [\n    {\n      \"rep_number\": 1,\n      \"duration_ms\": 2500,\n      \"activations\": [\n        { \"muscle\": \"VASTUS_LATERALIS\", \"side\": \"LEFT\",  \"percent_mvc\": 75.0, \"peak_percent_mvc\": 110.0 },\n        { \"muscle\": \"VASTUS_LATERALIS\", \"side\": \"RIGHT\", \"percent_mvc\": 73.0, \"peak_percent_mvc\": 108.0 },\n        { \"muscle\": \"GLUTEUS_MAXIMUS\",  \"side\": \"LEFT\",  \"percent_mvc\": 80.0, \"peak_percent_mvc\": 120.0 },\n        { \"muscle\": \"GLUTEUS_MAXIMUS\",  \"side\": \"RIGHT\", \"percent_mvc\": 78.0, \"peak_percent_mvc\": 118.0 }\n      ]\n    },\n    {\n      \"rep_number\": 2,\n      \"duration_ms\": 2600,\n      \"activations\": [\n        { \"muscle\": \"VASTUS_LATERALIS\", \"side\": \"LEFT\",  \"percent_mvc\": 76.5, \"peak_percent_mvc\": 112.0 },\n        { \"muscle\": \"VASTUS_LATERALIS\", \"side\": \"RIGHT\", \"percent_mvc\": 74.5, \"peak_percent_mvc\": 110.0 }\n      ]\n    }\n  ],\n  \"metrics\": {\n    \"bsa_vl_pct\": 32.5,\n    \"bsa_vm_pct\": 28.0,\n    \"bsa_gmax_pct\": 28.0,\n    \"bsa_es_pct\": 11.5,\n    \"hq_ratio\": 0.55,\n    \"es_gmax_ratio\": 0.62,\n    \"intra_set_fatigue_ratio\": 0.18,\n    \"thresholds_version\": 1\n  },\n  \"recommendations\": [\n    {\n      \"text\": \"Fatiga intra-set elevada — descansá al menos 4 min antes del próximo set.\",\n      \"severity\": \"MONITOR\",\n      \"evidence\": \"intra_set_fatigue_ratio=0.18\"\n    }\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/sessions/{{session_id}}/sets",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "sessions", "{{session_id}}", "sets"]
+                        },
+                        "description": "Ingests an entire set in a single request: training_set + reps[] (with inline activations) + metrics{} + recommendations[]. Wrapped in a DB transaction.\n\nIdempotent by (session_id, set_number): re-posting with the same set_number returns the existing set. 409 if the session is already ended. 404 if not owned. Returns the persisted set."
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Instructor",
+            "item": [
+                {
+                    "name": "List guests",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/instructor/guests",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "instructor", "guests"]
+                        },
+                        "description": "Returns guest profiles created by the authenticated instructor. Instructor-only."
+                    }
+                },
+                {
+                    "name": "Create guest",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"first_name\": \"Guest\",\n  \"last_name\": \"Lifter\",\n  \"bodyweight_kg\": 78.0,\n  \"age_years\": 24,\n  \"sex\": \"MALE\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/instructor/guests",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "instructor", "guests"]
+                        },
+                        "description": "Creates an on-the-fly guest profile (athlete without a user account). Saves the new id into `{{guest_id}}`."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    const body = pm.response.json();",
+                                    "    if (body.id) { pm.collectionVariables.set('guest_id', body.id); }",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Calibrate guest (MVC)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"calibrations\": [\n    { \"muscle\": \"VASTUS_LATERALIS\", \"side\": \"LEFT\",  \"mvc_value\": 85.5 },\n    { \"muscle\": \"VASTUS_LATERALIS\", \"side\": \"RIGHT\", \"mvc_value\": 83.2 },\n    { \"muscle\": \"VASTUS_MEDIALIS\",  \"side\": \"LEFT\",  \"mvc_value\": 80.4 },\n    { \"muscle\": \"VASTUS_MEDIALIS\",  \"side\": \"RIGHT\", \"mvc_value\": 79.8 },\n    { \"muscle\": \"GLUTEUS_MAXIMUS\",  \"side\": \"LEFT\",  \"mvc_value\": 91.3 },\n    { \"muscle\": \"GLUTEUS_MAXIMUS\",  \"side\": \"RIGHT\", \"mvc_value\": 89.7 },\n    { \"muscle\": \"ERECTOR_SPINAE\",   \"side\": \"LEFT\",  \"mvc_value\": 78.6 },\n    { \"muscle\": \"ERECTOR_SPINAE\",   \"side\": \"RIGHT\", \"mvc_value\": 79.1 },\n    { \"muscle\": \"BICEPS_FEMORIS\",   \"side\": \"LEFT\",  \"mvc_value\": 76.0 },\n    { \"muscle\": \"BICEPS_FEMORIS\",   \"side\": \"RIGHT\", \"mvc_value\": 74.5 }\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/instructor/guests/{{guest_id}}/mvc",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "instructor", "guests", "{{guest_id}}", "mvc"]
+                        },
+                        "description": "Upserts the MVC calibration row for a guest the instructor owns. Same payload shape as the athlete endpoint. 404 if the guest belongs to another instructor."
+                    }
+                },
+                {
+                    "name": "Create instructor session",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"guest_profile_id\": {{guest_id}},\n  \"exercise\": \"back_squat\",\n  \"started_at\": \"{{$isoTimestamp}}\",\n  \"device_source\": \"SIMULATED\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/instructor/sessions",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "instructor", "sessions"]
+                        },
+                        "description": "Instructor creates a training session for one of their guests. Fails if the guest has already been claimed. Saves the new id into `{{session_id}}`."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    const body = pm.response.json();",
+                                    "    if (body.id) { pm.collectionVariables.set('session_id', body.id); }",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Generate claim code",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/instructor/sessions/{{session_id}}/claim-code",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "instructor", "sessions", "{{session_id}}", "claim-code"]
+                        },
+                        "description": "Generates an 8-char claim code for a guest session. Invalidates any previous active code for the same session. Saves the code into `{{claim_code}}`."
+                    },
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "if (pm.response.code === 201) {",
+                                    "    const body = pm.response.json();",
+                                    "    if (body.code) { pm.collectionVariables.set('claim_code', body.code); }",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Claim",
+            "item": [
+                {
+                    "name": "Redeem claim code",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" },
+                            { "key": "Authorization", "value": "Bearer {{token}}" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"code\": \"{{claim_code}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/claim",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "claim"]
+                        },
+                        "description": "Authenticated athlete redeems an instructor-issued claim code. If the athlete has no profile/calibration, they inherit them from the guest. The guest session is reassigned to the athlete.\n\n404 invalid code · 410 expired/used code · 403 instructor cannot redeem."
+                    }
+                }
+            ]
         }
-      ]
-    }
-  ],
-  "variable": [
-    {
-      "key": "base_url",
-      "value": "http://127.0.0.1:8000",
-      "type": "string"
-    },
-    {
-      "key": "token",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "last_email",
-      "value": "",
-      "type": "string"
-    }
-  ]
+    ],
+    "variable": [
+        { "key": "base_url",   "value": "http://127.0.0.1:8000", "type": "string" },
+        { "key": "token",      "value": "", "type": "string" },
+        { "key": "last_email", "value": "", "type": "string" },
+        { "key": "session_id", "value": "", "type": "string" },
+        { "key": "guest_id",   "value": "", "type": "string" },
+        { "key": "claim_code", "value": "", "type": "string" }
+    ]
 }
